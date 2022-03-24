@@ -36,23 +36,16 @@ class Player(pygame.sprite.Sprite):
 		self.acc.x = -1.1
 		if self.vel.x <= -10:
 			self.vel.x = -10
-
-	def move(self):
-		self.acc = vec(0,GRAV) 
-
-		self.acc.x += self.vel.x * FRIC
-		self.vel += self.acc
-		self.pos += self.vel + 0.5 * self.acc
-		self.jumping = False
-	 
-		self.rect.midbottom = self.pos
 	
 	def update(self):
 		pressed_keys = pygame.key.get_pressed()
 		if pressed_keys[K_RIGHT]:
-			walkRight()
+			self.walkRight()
 		if pressed_keys[K_LEFT]:
-			walkLeft()
+			self.walkLeft()
+		self.vel += self.acc
+		self.pos += self.vel + 0.5 * self.acc
+		self.rect.midbottom = self.pos
 
 		hits = pygame.sprite.spritecollide(P1 , platforms, False)
 		if hits:
@@ -110,8 +103,7 @@ while True:
 				plat.kill()
 	 
 	displaysurface.fill((0,0,0))
- 
-	P1.move()
+
 	P1.update()
 	print(P1.vel.x)
 	for entity in all_sprites:
