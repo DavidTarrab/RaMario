@@ -28,34 +28,63 @@ class Player(pygame.sprite.Sprite):
 		self.acc = vec(0,0)
 
 		self.facingRight = True
+		self.scroll = False
+		self.running = False
+		self.moving = False
 
 	def walkRight(self):
 		self.acc.x = 0.8
 		self.facingRight = True
+		self.moving = True
 
 	def walkLeft(self):
 		self.acc.x = -0.8
 		self.facingRight = False
-	
+		if self.vel.x <= 0:
+			self.scroll = False
+		self.moving = True
+
+	def runRight(self):
+		self.acc.x = 1.2
+		self.facingRight = True
+		self.running = True
+		self.moving = True
+
+	def runLeft(self):
+		self.acc.x = -1.2
+		self.facingRight = False
+		if self.vel.x <= 0:
+			self.scroll = False
+		self.running = True
+		self.moving = True
+
 	def update(self):
 		self.acc = vec(0, GRAV)
+		self.running = False
+		self.moving = False
 
 		# Get key presses
 		pressed_keys = pygame.key.get_pressed()
 		# Trigger movement with key presses
-		if pressed_keys[K_RIGHT]:
-			self.walkRight()
-		elif pressed_keys[K_LEFT]:
-			self.walkLeft()
+		if pressed_keys[K_LSHIFT]:
+			if pressed_keys[K_RIGHT]:
+				self.runRight()
+			elif pressed_keys[K_LEFT]:
+				self.runLeft()
+		elif not pressed_keys[K_LSHIFT]:
+			if pressed_keys[K_RIGHT]:
+				self.walkRight()
+			elif pressed_keys[K_LEFT]:
+				self.walkLeft()
 		# Deceleration on right facing
-		elif self.facingRight:
+		if not self.moving and self.facingRight:
 			if self.vel.x > 0:
 				self.acc.x = -0.4
 			elif self.vel.x < 0:
 				self.vel.x = 0
 				self.acc.x = 0
 		# Deceleration on left facing
-		elif not self.facingRight:
+		elif not self.moving and not self.facingRight:
 			if self.vel.x < 0:
 				self.acc.x = 0.4
 			elif self.vel.x > 0:
@@ -64,21 +93,29 @@ class Player(pygame.sprite.Sprite):
 
 		# Update the velocity and position using kinematics
 		self.vel += self.acc
-		self.pos += self.vel + 0.5 * self.acc
+		self.pos.y += self.vel.y + 0.5 * self.acc.y
+		if not self.scroll:
+			self.pos.x += self.vel.x + 0.5 * self.acc.x
 
-		# Block left screen
+		# Left border
 		if self.pos.x < 0:
 			self.pos.x = 0
 
 		# Speed cap
-		if self.vel.x >= 8:
-			self.vel.x = 8
-		if self.vel.x <= -8:
-			self.vel.x = -8
+		if self.running:
+			if self.vel.x >= 11:
+				self.vel.x = 11
+			if self.vel.x <= -11:
+				self.vel.x = -11
+		else:
+			if self.vel.x >= 8:
+				self.vel.x = 8
+			if self.vel.x <= -8:
+				self.vel.x = -8
 
 		# Scrolling
 		if self.rect.right >= WIDTH / 3:
-			self.pos.x -= (abs(self.vel.x) + abs(0.5*self.acc.x))
+			self.scroll = True
 			for plat in platforms:
 				plat.rect.x -= abs(self.vel.x)
 				if plat.rect.right <= 0:
