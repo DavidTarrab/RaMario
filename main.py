@@ -22,7 +22,8 @@ class Player(pygame.sprite.Sprite):
 		self.surf = pygame.Surface((30, 30))
 		self.surf.fill((128,255,40))
 		self.rect = self.surf.get_rect()
-   
+   		
+   		#change to in terms of width and height
 		self.pos = vec((10, 385))
 		self.vel = vec(0,0)
 		self.acc = vec(0,0)
@@ -45,13 +46,13 @@ class Player(pygame.sprite.Sprite):
 		self.moving = True
 
 	def runRight(self):
-		self.acc.x = 1.2
+		self.acc.x = 1.1
 		self.facingRight = True
 		self.running = True
 		self.moving = True
 
 	def runLeft(self):
-		self.acc.x = -1.2
+		self.acc.x = -1.1
 		self.facingRight = False
 		if self.vel.x <= 0:
 			self.scroll = False
@@ -59,6 +60,7 @@ class Player(pygame.sprite.Sprite):
 		self.moving = True
 
 	def update(self):
+		#might not need this
 		self.acc = vec(0, GRAV)
 		self.running = False
 		self.moving = False
@@ -71,22 +73,24 @@ class Player(pygame.sprite.Sprite):
 				self.runRight()
 			elif pressed_keys[K_LEFT]:
 				self.runLeft()
-		elif not pressed_keys[K_LSHIFT]:
+		else:
 			if pressed_keys[K_RIGHT]:
 				self.walkRight()
 			elif pressed_keys[K_LEFT]:
 				self.walkLeft()
+
+
 		# Deceleration on right facing
 		if not self.moving and self.facingRight:
 			if self.vel.x > 0:
-				self.acc.x = -0.4
+				self.acc.x = -0.6
 			elif self.vel.x < 0:
 				self.vel.x = 0
 				self.acc.x = 0
 		# Deceleration on left facing
 		elif not self.moving and not self.facingRight:
 			if self.vel.x < 0:
-				self.acc.x = 0.4
+				self.acc.x = 0.6
 			elif self.vel.x > 0:
 				self.vel.x = 0
 				self.acc.x = 0
@@ -102,11 +106,12 @@ class Player(pygame.sprite.Sprite):
 			self.pos.x = 0
 
 		# Speed cap
+		#absolute value thing with facing right
 		if self.running:
-			if self.vel.x >= 11:
-				self.vel.x = 11
-			if self.vel.x <= -11:
-				self.vel.x = -11
+			if self.vel.x >= 13:
+				self.vel.x = 13
+			if self.vel.x <= -13:
+				self.vel.x = -13
 		else:
 			if self.vel.x >= 8:
 				self.vel.x = 8
@@ -117,6 +122,7 @@ class Player(pygame.sprite.Sprite):
 		if self.rect.right >= WIDTH / 3:
 			self.scroll = True
 			for plat in platforms:
+				#might not need absolute value
 				plat.rect.x -= abs(self.vel.x)
 				if plat.rect.right <= 0:
 					plat.kill()
@@ -171,7 +177,7 @@ while True:
 			pygame.quit()
 			sys.exit()
 		if event.type == pygame.KEYDOWN:    
-			if event.key == pygame.K_SPACE:
+			if event.key == pygame.K_UP:
 				P1.jump()
 	 
 	displaysurface.fill((0,0,0))
@@ -182,3 +188,4 @@ while True:
 
 	pygame.display.update()
 	FramePerSec.tick(FPS)
+	
