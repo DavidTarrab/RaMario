@@ -2,14 +2,16 @@ import pygame
 from pygame.locals import *
 import sys
 import random
+import math
  
 pygame.init()
 vec = pygame.math.Vector2  # 2 for two dimensional
  
-HEIGHT = 600
-WIDTH = 800
+HEIGHT = 380
+WIDTH = 500
 FPS = 60
-GRAV = 1.2
+GRAV = 0.8
+SIDE = 32
  
 FramePerSec = pygame.time.Clock()
  
@@ -18,49 +20,41 @@ pygame.display.set_caption("Game")
 
 class Player(pygame.sprite.Sprite):
 	def __init__(self):
-		super().__init__() 
-		self.surf = pygame.Surface((40, 40))
-		self.surf.fill((128,255,40))
+		super().__init__()
+		self.sprite = "stand"
+
+		self.surf = pygame.image.load("Sprites/" + self.sprite + ".png").convert()
+		self.surf.set_colorkey((255, 255, 255), RLEACCEL)
 		self.rect = self.surf.get_rect()
    
-		self.pos = vec((10, 385))
+		self.pos = vec((10, HEIGHT - 104))
 		self.vel = vec(0,0)
 		self.acc = vec(0,0)
 
-		self.facingRight = True
+		self.facing = 1
 		self.scroll = False
 		self.running = False
 		self.moving = False
 		self.collisions = []
 		self.jumpable = False
+		self.movingFrames = 0
+		self.inAir = True
+		self.dying = False
 
-	def walkRight(self):
-		self.acc.x = 0.8
-		self.facingRight = True
-		self.moving = True
-
-	def walkLeft(self):
-		self.acc.x = -0.8
-		self.facingRight = False
-		if self.vel.x <= 0:
+	def walk(self):
+		self.acc.x = self.facing * 0.4
+		if self.facing == -1 and self.vel.x < 0:
 			self.scroll = False
 		self.moving = True
 
-	def runRight(self):
-		self.acc.x = 1.2
-		self.facingRight = True
-		self.running = True
-		self.moving = True
-
-	def runLeft(self):
-		self.acc.x = -1.2
-		self.facingRight = False
-		if self.vel.x <= 0:
+	def run(self):
+		self.acc.x = self.facing * 0.4
+		if self.facing == -1 and self.vel.x < 0:
 			self.scroll = False
 		self.running = True
 		self.moving = True
 
-	def checkCollision(self, platform):
+	def checkCollision(self):
 		self.collisions = []
 		hits = pygame.sprite.spritecollide(P1 , platforms, False)
 		for platform in hits:
@@ -74,41 +68,59 @@ class Player(pygame.sprite.Sprite):
 				self.collisions.append((platform, 'left'))
 
 	def update(self):
-		self.acc = vec(0, GRAV)
+		if not self.dying:
+			self.acc = vec(0, GRAV)
 		self.running = False
 		self.moving = False
 		self.jumpable = False
+		self.inAir = True
 
-		for platform in platforms:
-			self.checkCollision(platform)
+		self.checkCollision()
+		self.checkDamage()
 
 		# Get key presses
 		pressed_keys = pygame.key.get_pressed()
 		# Trigger movement with key presses
-		if pressed_keys[K_LSHIFT]:
-			if pressed_keys[K_RIGHT]:
-				self.runRight()
-			elif pressed_keys[K_LEFT]:
-				self.runLeft()
-		elif not pressed_keys[K_LSHIFT]:
-			if pressed_keys[K_RIGHT]:
-				self.walkRight()
-			elif pressed_keys[K_LEFT]:
-				self.walkLeft()
-		# Deceleration on right facing
-		if not self.moving and self.facingRight:
-			if self.vel.x > 0:
-				self.acc.x = -0.6
-			elif self.vel.x < 0:
-				self.vel.x = 0
-				self.acc.x = 0
-		# Deceleration on left facing
-		elif not self.moving and not self.facingRight:
-			if self.vel.x < 0:
-				self.acc.x = 0.6
-			elif self.vel.x > 0:
-				self.vel.x = 0
-				self.acc.x = 0
+		if not self.dying:
+			if pressed_keys[K_LSHIFT]:
+				if pressed_keys[K_RIGHT]:
+					self.facing = 1
+					self.run()
+				elif pressed_keys[K_LEFT]:
+					self.facing = -1
+					self.run()
+			elif not pressed_keys[K_LSHIFT]:
+				if pressed_keys[K_RIGHT]:
+					self.facing = 1
+					self.walk()
+				elif pressed_keys[K_LEFT]:
+					self.facing = -1
+					self.walk()
+
+			# Collision detection
+			for collision in self.collisions:
+				if collision[1] == 'bottom' and self.vel.y >= 0:
+					self.pos.y = collision[0].rect.top + 1
+					self.vel.y = 0
+					self.jumpable = True
+					self.inAir = False
+				if collision[1] == 'top' and self.vel.y <= 0:
+					self.pos.y = collision[0].rect.bottom + 30
+					self.vel.y = 0
+				if collision[1] == 'right':
+					self.pos.x = collision[0].rect.left - 30
+					self.vel.x = 0
+				if collision[1] == 'left':
+					self.pos.x = collision[0].rect.right + 1
+					self.vel.x = 0
+
+			# Deceleration
+			if not self.moving and not self.inAir:
+				if self.facing * self.vel.x > 0:
+					self.acc.x = self.facing * -0.6
+				elif self.facing * self.vel.x < 0:
+					self.vel.x = 0
+					self.acc.x = 0
 
 		# Update the velocity and position using kinematics
 		self.vel += self.acc
@@ -121,71 +133,99 @@ class Player(pygame.sprite.Sprite):
 			self.pos.x = 0
 
 		# Speed cap
-		if self.running:
-			if self.vel.x >= 11:
-				self.vel.x = 11
-			if self.vel.x <= -11:
-				self.vel.x = -11
+		if self.running or self.inAir:
+			if self.vel.x >= 10:
+				self.vel.x = 10
+			if self.vel.x <= -10:
+				self.vel.x = -10
 		else:
-			if self.vel.x >= 8:
-				self.vel.x = 8
-			if self.vel.x <= -8:
-				self.vel.x = -8
+			if self.vel.x >= 4:
+				self.vel.x = 4
+			if self.vel.x <= -4:
+				self.vel.x = -4
 
 		# Scrolling
-		if self.rect.right >= WIDTH / 3:
+		if self.rect.right >= WIDTH / 3 and self.vel.x >= 0:
 			self.scroll = True
 			for plat in platforms:
 				plat.rect.x -= abs(self.vel.x)
 				if plat.rect.right <= 0:
 					plat.kill()
 
-		# Collision detection
-		for collision in self.collisions:
-			if collision[1] == 'bottom' and not self.vel.y < 0:
-				self.pos.y = collision[0].rect.top + 1
-				self.vel.y = 0
-				self.jumpable = True
-			if collision[1] == 'top':
-				self.pos.y = collision[0].rect.bottom + 30
-				self.vel.y = 0
-			if collision[1] == 'right':
-				self.pos.x = collision[0].rect.left - 30
-				self.vel.x = 0
-			if collision[1] == 'left':
-				self.pos.x = collision[0].rect.right + 1
-				self.vel.x = 0
+		if self.moving and not self.inAir:
+			self.movingFrames += 1
+		else:
+			self.movingFrames = 0
+
+		frameDiff = 5
+		
+		if not self.inAir:
+			if self.movingFrames == 0:
+				self.sprite = "stand"
+			elif self.movingFrames > 0 and self.movingFrames <= frameDiff:
+				self.sprite = "walk0"
+			elif self.movingFrames > frameDiff and self.movingFrames <= 2 * frameDiff:
+				self.sprite = "walk1"
+			elif self.movingFrames > 2 * frameDiff and self.movingFrames <= 3 * frameDiff:
+				self.sprite = "walk2"
+			elif self.movingFrames == 3 * frameDiff + 1:
+				self.movingFrames = 0
+		elif self.inAir:
+			self.sprite = "jump"
+
+		if (self.vel.x < 0 and self.acc.x > 0) or (self.vel.x > 0 and self.acc.x < 0) and not self.inAir:
+			self.sprite = "skid"
+
+		if self.dying == True:
+			self.sprite = "die"
+
+		if self.facing == 1:
+			self.surf = pygame.image.load("Sprites/" + self.sprite + ".png").convert()
+		else:
+			self.surf = pygame.transform.flip(pygame.image.load("Sprites/" + self.sprite + ".png").convert(), True, False)
 
 		# Update actual position of the sprite
 		self.rect.bottomleft = self.pos
 
 	def jump(self):
 		if self.jumpable:
-			self.vel.y = -23
+			self.vel.y = -15.5
+
+	def checkDamage(self):
+		if self.rect.top > HEIGHT and not self.dying:
+			self.deathAnim()
+
+	def deathAnim(self):
+		self.vel = vec(0, -18)
+		self.acc = vec(0, 0.5)
+		self.dying = True
  
 class platform(pygame.sprite.Sprite):
-	def __init__(self, width, height, x, y):
+	def __init__(self, x, y, sprite):
 		super().__init__()
-		self.width = width
-		self.height = height
 		self.x = x
 		self.y = y
-		self.surf = pygame.Surface((width, height))
-		self.surf.fill((255,0,0))
+		self.sprite = sprite
+
+		self.surf = pygame.image.load("Sprites/" + self.sprite + ".png").convert()
+		self.surf.set_colorkey((255, 255, 255), RLEACCEL)
 		self.rect = self.surf.get_rect(center = (x, y))
- 
-floor = platform(WIDTH*8, 80, WIDTH*4, HEIGHT - 40)
 
 P1 = Player()
 
 all_sprites = pygame.sprite.Group()
-all_sprites.add(floor)
 all_sprites.add(P1)
 
 platforms = pygame.sprite.Group()
-platforms.add(floor)
-for x in range(random.randint(5, 10)):
-	pl = platform(40, 40, random.randint(100, WIDTH*5), random.randint(50, 500))
+
+for i in range(0, 150):
+	for k in range(0, 2):
+		floor = platform(SIDE*i, HEIGHT - SIDE/2 - SIDE*k, "block")
+		platforms.add(floor)
+		all_sprites.add(floor)
+
+for x in range(0, 20):
+	pl = platform(SIDE * random.randint(3, 125), HEIGHT - SIDE/2 - SIDE * 2, "brick")
 	platforms.add(pl)
 	all_sprites.add(pl)
 
@@ -194,7 +234,7 @@ while True:
 		if event.type == QUIT:
 			pygame.quit()
 			sys.exit()
-		if event.type == pygame.KEYDOWN:    
+		if event.type == pygame.KEYDOWN:
 			if event.key == pygame.K_UP:
 				P1.jump()
 	 
@@ -206,3 +246,10 @@ while True:
 
 	pygame.display.update()
 	FramePerSec.tick(FPS)
+
+'''
+--BUGS--
+	- Left and right collision doesn't function
+	- Platforms going offscreen during scrolling go slower at the border for some reason
+	- Clipping into platforms for 1 frame every time theres collision
+'''
