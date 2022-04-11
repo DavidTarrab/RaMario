@@ -10,7 +10,7 @@ vec = pygame.math.Vector2  # 2 for two dimensional
 HEIGHT = 380
 WIDTH = 500
 FPS = 60
-GRAV = 0.8
+GRAV = 0.7
 SIDE = 32
  
 FramePerSec = pygame.time.Clock()
@@ -22,8 +22,9 @@ class Player(pygame.sprite.Sprite):
 	def __init__(self):
 		super().__init__()
 		self.sprite = "stand"
+		self.state = "small"
 
-		self.surf = pygame.image.load("Sprites/" + self.sprite + ".png").convert()
+		self.surf = pygame.image.load("Sprites/" + self.sprite + "_" + self.state + ".png").convert()
 		self.surf.set_colorkey((255, 255, 255), RLEACCEL)
 		self.rect = self.surf.get_rect()
    
@@ -40,6 +41,7 @@ class Player(pygame.sprite.Sprite):
 		self.movingFrames = 0
 		self.inAir = True
 		self.dying = False
+		self.crouching = False
 
 	def walk(self):
 		self.acc.x = self.facing * 0.4
@@ -82,14 +84,14 @@ class Player(pygame.sprite.Sprite):
 		pressed_keys = pygame.key.get_pressed()
 		# Trigger movement with key presses
 		if not self.dying:
-			if pressed_keys[K_LSHIFT]:
+			if pressed_keys[K_LSHIFT] and not self.crouching:
 				if pressed_keys[K_RIGHT]:
 					self.facing = 1
 					self.run()
 				elif pressed_keys[K_LEFT]:
 					self.facing = -1
 					self.run()
-			elif not pressed_keys[K_LSHIFT]:
+			elif not pressed_keys[K_LSHIFT] and not self.crouching:
 				if pressed_keys[K_RIGHT]:
 					self.facing = 1
 					self.walk()
@@ -107,6 +109,8 @@ class Player(pygame.sprite.Sprite):
 				if collision[1] == 'top' and self.vel.y <= 0:
 					self.pos.y = collision[0].rect.bottom + 30
 					self.vel.y = 0
+					if collision[0].sprite == "question" or collision[0].sprite == "brick":
+						collision[0].opening = True
 				if collision[1] == 'right':
 					self.pos.x = collision[0].rect.left - 30
 					self.vel.x = 0
@@ -131,9 +135,10 @@ class Player(pygame.sprite.Sprite):
 		# Left border
 		if self.pos.x < 0:
 			self.pos.x = 0
+			self.vel.x = 0
 
 		# Speed cap
-		if self.running or self.inAir:
+		if self.running or (self.inAir and self.running):
 			if self.vel.x >= 10:
 				self.vel.x = 10
 			if self.vel.x <= -10:
@@ -145,7 +150,7 @@ class Player(pygame.sprite.Sprite):
 				self.vel.x = -4
 
 		# Scrolling
-		if self.rect.right >= WIDTH / 3 and self.vel.x >= 0:
+		if self.rect.right >= WIDTH / 2.5 and self.vel.x >= 0:
 			self.scroll = True
 			for plat in platforms:
 				plat.rect.x -= abs(self.vel.x)
@@ -173,43 +178,81 @@ class Player(pygame.sprite.Sprite):
 		elif self.inAir:
 			self.sprite = "jump"
 
-		if (self.vel.x < 0 and self.acc.x > 0) or (self.vel.x > 0 and self.acc.x < 0) and not self.inAir:
+		if ((self.vel.x < 0 and self.acc.x > 0) or (self.vel.x > 0 and self.acc.x < 0)) and not self.inAir:
 			self.sprite = "skid"
+
+		if not self.inAir and pressed_keys[K_DOWN] and self.state == "big":
+			self.sprite = "crouch"
+			self.crouching = True
+		else:
+			self.crouching = False
 
 		if self.dying == True:
 			self.sprite = "die"
 
 		if self.facing == 1:
-			self.surf = pygame.image.load("Sprites/" + self.sprite + ".png").convert()
+			self.surf = pygame.image.load("Sprites/" + self.sprite + "_" + self.state + ".png").convert()
 		else:
-			self.surf = pygame.transform.flip(pygame.image.load("Sprites/" + self.sprite + ".png").convert(), True, False)
+			self.surf = pygame.transform.flip(pygame.image.load("Sprites/" + self.sprite + "_" + self.state + ".png").convert(), True, False)
+
+		self.rect = self.surf.get_rect()
 
 		# Update actual position of the sprite
 		self.rect.bottomleft = self.pos
 
 	def jump(self):
 		if self.jumpable:
-			self.vel.y = -15.5
+			self.vel.y = -14 - abs(self.vel.x + 0.01)/3
 
 	def checkDamage(self):
 		if self.rect.top > HEIGHT and not self.dying:
+			self.state = "small"
 			self.deathAnim()
 
 	def deathAnim(self):
-		self.vel = vec(0, -18)
-		self.acc = vec(0, 0.5)
+		self.vel = vec(0, -16)
+		self.acc = vec(0, 0.6)
 		self.dying = True
  
 class platform(pygame.sprite.Sprite):
 	def __init__(self, x, y, sprite):
 		super().__init__()
-		self.x = x
-		self.y = y
 		self.sprite = sprite
+		self.x = SIDE/2 + SIDE * x
+		self.y = HEIGHT - SIDE/2 - SIDE * y
+		self.opening = False
 
 		self.surf = pygame.image.load("Sprites/" + self.sprite + ".png").convert()
 		self.surf.set_colorkey((255, 255, 255), RLEACCEL)
-		self.rect = self.surf.get_rect(center = (x, y))
+		self.rect = self.surf.get_rect(center = (self.x, self.y))
+
+		self.pos = vec(0, 0)
+		self.pos.x = self.x
+		self.pos.y = self.y
+		self.vel = vec(0,0)
+
+	def open(self):
+		if self.sprite == "question":
+			if self.vel.y <= 0:
+				self.vel.y = -5
+				self.pos.y += self.vel.y
+			if self.pos.y <= self.y - 25 or self.vel.y > 0:
+				self.vel.y = 5
+				self.pos.y += self.vel.y
+				if self.pos.y >= self.y:
+					self.vel.y = 0
+					self.pos.y = self.y
+					self.opening = False
+					self.sprite = "empty-question"
+		if self.sprite == "brick":
+			self.kill()
+
+	def update(self):
+		if self.opening:
+			self.open()
+
+		self.rect.bottom = self.pos.y + SIDE/2
+		self.surf = pygame.image.load("Sprites/" + self.sprite + ".png").convert()
 
 P1 = Player()
 
@@ -220,14 +263,24 @@ platforms = pygame.sprite.Group()
 
 for i in range(0, 150):
 	for k in range(0, 2):
-		floor = platform(SIDE*i, HEIGHT - SIDE/2 - SIDE*k, "block")
+		floor = platform(i, k, "ground")
 		platforms.add(floor)
 		all_sprites.add(floor)
 
-for x in range(0, 20):
-	pl = platform(SIDE * random.randint(3, 125), HEIGHT - SIDE/2 - SIDE * 2, "brick")
-	platforms.add(pl)
-	all_sprites.add(pl)
+blocks = [
+platform(10, 4, "question"),
+platform(13, 4, "brick"),
+platform(14, 4, "question"),
+platform(15, 4, "brick"),
+platform(16, 4, "question"),
+platform(17, 4, "brick"),
+platform(15, 7, "question"),
+
+]
+
+for block in blocks:
+	platforms.add(block)
+	all_sprites.add(block)
 
 while True:
 	for event in pygame.event.get():
@@ -238,9 +291,13 @@ while True:
 			if event.key == pygame.K_UP:
 				P1.jump()
 	 
-	displaysurface.fill((0,0,0))
+	displaysurface.fill((41, 200, 214))
  
 	P1.update()
+	for platform in platforms:
+		if platform.opening:
+			platform.update()
+
 	for entity in all_sprites:
 		displaysurface.blit(entity.surf, entity.rect)
 
